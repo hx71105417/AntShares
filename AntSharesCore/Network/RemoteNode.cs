@@ -179,22 +179,22 @@ namespace AntShares.Network
 
         private void OnGetDataMessageReceived(InvPayload payload)
         {
-            foreach (UInt256 hash in payload.Hashes.Distinct())
+            foreach (InventoryVector vector in payload.Inventories.Distinct())
             {
                 IInventory inventory;
-                if (!localNode.RelayCache.TryGet(hash, out inventory) && !localNode.ServiceEnabled)
+                if (!localNode.RelayCache.TryGet(vector.Hash, out inventory) && !localNode.ServiceEnabled)
                     continue;
-                switch (payload.Type)
+                switch (vector.Type)
                 {
                     case InventoryType.TX:
                         if (inventory == null && Blockchain.Default != null)
-                            inventory = Blockchain.Default.GetTransaction(hash);
+                            inventory = Blockchain.Default.GetTransaction(vector.Hash);
                         if (inventory != null)
                             EnqueueMessage("tx", inventory);
                         break;
                     case InventoryType.Block:
                         if (inventory == null && Blockchain.Default != null)
-                            inventory = Blockchain.Default.GetBlock(hash);
+                            inventory = Blockchain.Default.GetBlock(vector.Hash);
                         if (inventory != null)
                         {
                             BloomFilter filter = bloom_filter;
@@ -258,26 +258,24 @@ namespace AntShares.Network
 
         private void OnInvMessageReceived(InvPayload payload)
         {
-            if (payload.Type != InventoryType.TX && payload.Type != InventoryType.Block && payload.Type != InventoryType.Consensus)
-                return;
-            UInt256[] hashes = payload.Hashes.Distinct().ToArray();
+            InventoryVector[] vectors = payload.Inventories.Distinct().Where(p => Enum.IsDefined(typeof(InventoryType), p.Type)).ToArray();
             lock (LocalNode.KnownHashes)
             {
-                hashes = hashes.Where(p => !LocalNode.KnownHashes.Contains(p)).ToArray();
+                vectors = vectors.Where(p => !LocalNode.KnownHashes.Contains(p.Hash)).ToArray();
             }
-            if (hashes.Length == 0) return;
+            if (vectors.Length == 0) return;
             lock (missions_global)
             {
                 if (localNode.GlobalMissionsEnabled)
-                    hashes = hashes.Where(p => !missions_global.Contains(p)).ToArray();
-                foreach (UInt256 hash in hashes)
+                    vectors = vectors.Where(p => !missions_global.Contains(p.Hash)).ToArray();
+                foreach (InventoryVector vector in vectors)
                 {
-                    missions_global.Add(hash);
-                    missions.Add(hash);
+                    missions_global.Add(vector.Hash);
+                    missions.Add(vector.Hash);
                 }
             }
-            if (hashes.Length == 0) return;
-            EnqueueMessage("getdata", InvPayload.Create(payload.Type, hashes));
+            if (vectors.Length == 0) return;
+            EnqueueMessage("getdata", InvPayload.Create(vectors));
         }
 
         private void OnMemPoolMessageReceived()
@@ -376,7 +374,6 @@ namespace AntShares.Network
 
         internal bool Relay(IInventory data)
         {
-            if (!Version.Relay) return false;
             if (data.InventoryType == InventoryType.TX)
             {
                 BloomFilter filter = bloom_filter;

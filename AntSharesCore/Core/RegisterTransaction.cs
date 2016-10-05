@@ -30,7 +30,6 @@ namespace AntShares.Core
         /// 2. 不限量模式：当Amount等于-1时，表示当前资产可以由创建者无限量发行。这种模式的自由度最大，但是公信力最低，不建议使用。
         /// </summary>
         public Fixed8 Amount;
-        public byte Precision;
         /// <summary>
         /// 发行者的公钥
         /// </summary>
@@ -40,7 +39,7 @@ namespace AntShares.Core
         /// </summary>
         public UInt160 Admin;
 
-        private static readonly string ShareName = "[{\"lang\":\"zh-CN\",\"name\":\"股权\"},{\"lang\":\"en\",\"name\":\"Share\"}]";
+        private static readonly string ShareName = "[{'lang':'zh-CN','name':'股权'},{'lang':'en','name':'Share'}]";
 
         /// <summary>
         /// 系统费用
@@ -70,20 +69,18 @@ namespace AntShares.Core
         /// <param name="reader">数据来源</param>
         protected override void DeserializeExclusiveData(BinaryReader reader)
         {
-            AssetType = (AssetType)reader.ReadByte();
+            this.AssetType = (AssetType)reader.ReadByte();
             if (!Enum.IsDefined(typeof(AssetType), AssetType) || AssetType == AssetType.CreditFlag || AssetType == AssetType.DutyFlag)
                 throw new FormatException();
-            Name = reader.ReadVarString();
-            Amount = reader.ReadSerializable<Fixed8>();
+            this.Name = reader.ReadVarString();
+            this.Amount = reader.ReadSerializable<Fixed8>();
             if (Amount == Fixed8.Zero || Amount < -Fixed8.Satoshi) throw new FormatException();
             if (AssetType == AssetType.Share && Amount <= Fixed8.Zero)
                 throw new FormatException();
             if (AssetType == AssetType.Invoice && Amount != -Fixed8.Satoshi)
                 throw new FormatException();
-            Precision = reader.ReadByte();
-            if (Precision > 8) throw new FormatException();
-            Issuer = ECPoint.DeserializeFrom(reader, ECCurve.Secp256r1);
-            Admin = reader.ReadSerializable<UInt160>();
+            this.Issuer = ECPoint.DeserializeFrom(reader, ECCurve.Secp256r1);
+            this.Admin = reader.ReadSerializable<UInt160>();
         }
 
         private Dictionary<CultureInfo, string> _names;
@@ -125,7 +122,7 @@ namespace AntShares.Core
         public override UInt160[] GetScriptHashesForVerifying()
         {
             UInt160 issuer = Contract.CreateSignatureRedeemScript(Issuer).ToScriptHash();
-            return base.GetScriptHashesForVerifying().Union(new[] { issuer }).OrderBy(p => p).ToArray();
+            return base.GetScriptHashesForVerifying().Union(new UInt160[] { issuer, Admin }).OrderBy(p => p).ToArray();
         }
 
         protected override void OnDeserialized()
@@ -146,7 +143,6 @@ namespace AntShares.Core
             writer.Write((byte)AssetType);
             writer.WriteVarString(Name);
             writer.Write(Amount);
-            writer.Write(Precision);
             writer.Write(Issuer);
             writer.Write(Admin);
         }
@@ -169,7 +165,6 @@ namespace AntShares.Core
                 json["asset"]["name"] = Name;
             }
             json["asset"]["amount"] = Amount.ToString();
-            json["asset"]["precision"] = Precision;
             json["asset"]["high"] = Amount.GetData() >> 32;
             json["asset"]["low"] = Amount.GetData() & 0xffffffff;
             json["asset"]["issuer"] = Issuer.ToString();

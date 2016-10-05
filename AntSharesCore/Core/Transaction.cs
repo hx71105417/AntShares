@@ -22,10 +22,6 @@ namespace AntShares.Core
         /// </summary>
         public readonly TransactionType Type;
         /// <summary>
-        /// 版本
-        /// </summary>
-        public const byte Version = 0;
-        /// <summary>
         /// 该交易所具备的额外特性
         /// </summary>
         public TransactionAttribute[] Attributes;
@@ -164,8 +160,6 @@ namespace AntShares.Core
 
         private void DeserializeUnsignedWithoutType(BinaryReader reader)
         {
-            if (reader.ReadByte() != Version)
-                throw new FormatException();
             DeserializeExclusiveData(reader);
             Attributes = reader.ReadSerializableArray<TransactionAttribute>();
             if (Attributes.Select(p => p.Usage).Distinct().Count() != Attributes.Length)
@@ -179,6 +173,10 @@ namespace AntShares.Core
             Outputs = reader.ReadSerializableArray<TransactionOutput>();
             if (Outputs.Length > ushort.MaxValue + 1)
                 throw new FormatException();
+            if (Blockchain.AntShare != null)
+                foreach (TransactionOutput output in Outputs.Where(p => p.AssetId == Blockchain.AntShare.Hash))
+                    if (output.Value.GetData() % 100000000 != 0)
+                        throw new FormatException();
         }
 
         public bool Equals(Transaction other)
@@ -277,7 +275,6 @@ namespace AntShares.Core
         void ISignable.SerializeUnsigned(BinaryWriter writer)
         {
             writer.Write((byte)Type);
-            writer.Write(Version);
             SerializeExclusiveData(writer);
             writer.Write(Attributes);
             writer.Write(Inputs);
@@ -315,9 +312,6 @@ namespace AntShares.Core
             {
                 RegisterTransaction asset = Blockchain.Default.GetTransaction(group.Key) as RegisterTransaction;
                 if (asset == null) return false;
-                foreach (TransactionOutput output in group)
-                    if (output.Value.GetData() % (long)Math.Pow(10, 8 - asset.Precision) != 0)
-                        return false;
             }
             TransactionResult[] results = GetTransactionResults()?.ToArray();
             if (results == null) return false;
