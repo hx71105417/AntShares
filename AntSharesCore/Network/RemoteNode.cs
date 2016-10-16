@@ -187,6 +187,8 @@ namespace AntShares.Network
                 switch (vector.Type)
                 {
                     case InventoryType.TX:
+                        if (inventory == null)
+                            inventory = LocalNode.GetTransaction(vector.Hash);
                         if (inventory == null && Blockchain.Default != null)
                             inventory = Blockchain.Default.GetTransaction(vector.Hash);
                         if (inventory != null)

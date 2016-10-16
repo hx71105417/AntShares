@@ -301,6 +301,17 @@ namespace AntShares.Network
             }
         }
 
+        public static Transaction GetTransaction(UInt256 hash)
+        {
+            lock (MemoryPool)
+            {
+                Transaction tx;
+                if (!MemoryPool.TryGetValue(hash, out tx))
+                    return null;
+                return tx;
+            }
+        }
+
         private static bool IsIntranetAddress(IPAddress address)
         {
             byte[] data = address.MapToIPv4().GetAddressBytes();
